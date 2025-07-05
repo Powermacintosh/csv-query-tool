@@ -1,0 +1,19 @@
+[run]
+source = core
+omit = 
+    */tests/*
+    */__pycache__/*
+    */site-packages/*
+    */venv/*
+    */.venv/*
+
+[report]
+show_missing = true
+skip_covered = true
+fail_under = 80
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

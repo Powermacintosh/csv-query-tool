@@ -1,0 +1,6 @@
+product_id,product_name,category,quantity,price,last_restock,supplier,is_available
+P123,Смартфон XYZ,Электроника,45,14999.99,2024-12-15,TechCorp,True
+P456,Ноутбут Ultra,Электроника,12,125999.00,2025-01-05,TechGuru,True
+P789,Наушники Pro,Аксессуары,87,3499.50,2025-01-10,AudioPlus,True
+P321,Чехол для телефона,Аксессуары,0,999.00,2024-11-30,CaseMasters,False
+P654,Монитор 27",Офис

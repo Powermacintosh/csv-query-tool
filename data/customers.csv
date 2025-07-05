@@ -1,0 +1,6 @@
+customer_id,name,email,phone,city,registration_date,total_orders,average_order_value,last_purchase,is_vip
+C001,Иванов Алексей,alex@example.com,+79161234567,Москва,2023-01-15,12,12500.50,2025-01-10,True
+C002,Петрова Мария,maria@example.com,+79261234567,Санкт-Петербург,2023-03-22,5,8700.00,2024-12-15,False
+C003,Сидоров Дмитрий,dmitry@example.com,+79361234567,Казань,2023-05-10,8,15600.75,2025-01-05,True
+C004,Кузнецова Елена,elena@example.com,+79461234567,Екатеринбург,2023-07-18,3,5200.00,2024-11-20,False
+C005,Васильев Игорь,igor@example.com,+79561234567,Новосибирск,2023-09-30,15,23400.25,2025-01-12,True
