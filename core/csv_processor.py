@@ -56,12 +56,25 @@ class FilterCondition:
         logger.debug('Доступные операторы: %s', supported_operators)
         
         # Проверяем наличие недопустимых операторов
-        invalid_operators = ['<>', '!=', '<=', '>=']
+        invalid_operators = ['<>', '!=', '<=', '>=', '==']
         for invalid_op in invalid_operators:
             if invalid_op in condition_str:
-                error_msg = 'Неподдерживаемый оператор условия'
-                logger.error('%s: %s', error_msg, invalid_op)
+                error_msg = (
+                    f'Неподдерживаемый оператор "{invalid_op}". '
+                    f'Используйте один из: {", ".join(supported_operators)}'
+                )
+                logger.error(error_msg)
                 raise ValueError(error_msg)
+        
+        # Проверяем наличие хотя бы одного поддерживаемого оператора
+        has_any_operator = any(op in condition_str for op in supported_operators)
+        if not has_any_operator:
+            error_msg = (
+                f'Не найден поддерживаемый оператор в условии: "{condition_str}". '
+                f'Используйте один из: {", ".join(supported_operators)}'
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         # Ищем поддерживаемые операторы в порядке убывания длины
         for op_str in sorted(supported_operators, key=len, reverse=True):
@@ -85,7 +98,11 @@ class FilterCondition:
                     
                 return cls(column=column, operator=operators[op_str], value=value)
         
-        error_msg = f'Не найден поддерживаемый оператор в условии: {condition_str}'
+        # Эта строка должна быть недостижима из-за проверки has_any_operator выше
+        error_msg = (
+            f'Не удалось разобрать условие: "{condition_str}". '
+            f'Используйте формат: "поле{''.join(supported_operators)}значение"'
+        )
         logger.error(error_msg)
         raise ValueError(error_msg)
 
@@ -98,31 +115,83 @@ class Aggregation:
 
     @classmethod
     def from_string(cls, agg_str: str) -> 'Aggregation':
-        """Создает условие агрегации из строки."""
-        try:
-            column, op_str = agg_str.split('=', 1)
-            column = column.strip()
-            op_str = op_str.strip()
+        """
+        Создает условие агрегации из строки.
+        
+        Args:
+            agg_str: Строка в формате "column=operation"
             
+        Returns:
+            Aggregation: Объект с условием агрегации
+            
+        Raises:
+            ValueError: Если строка имеет неверный формат или операция не поддерживается
+        """
+        if not agg_str or not agg_str.strip():
+            error_msg = 'Пустая строка агрегации. Используйте формат: column=operation'
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        # Проверяем наличие знака равенства
+        if '=' not in agg_str:
+            error_msg = (
+                f'Неверный формат строки агрегации: "{agg_str}". '
+                f'Используйте формат: column=operation, где operation одно из: '
+                f'{", ".join(op.value for op in AggregationOperation)}'
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        try:
+            # Разделяем строку на части
+            parts = agg_str.split('=', 1)
+            if len(parts) != 2:
+                raise ValueError('Ожидается ровно один знак "="')
+                
+            column = parts[0].strip()
+            op_str = parts[1].strip()
+            
+            # Проверяем, что колонка указана
             if not column:
                 error_msg = 'Не указано имя колонки для агрегации'
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-                
-            try:
-                operation = AggregationOperation(op_str)
-            except ValueError as e:
-                error_msg = f'Неподдерживаемая операция агрегации: {op_str}. '
-                error_msg += f'Доступно: {', '.join(op.value for op in AggregationOperation)}'
+            
+            # Проверяем, что операция указана
+            if not op_str:
+                error_msg = (
+                    f'Не указана операция агрегации. '
+                    f'Доступные операции: {", ".join(op.value for op in AggregationOperation)}'
+                )
                 logger.error(error_msg)
-                raise ValueError(error_msg) from e
+                raise ValueError(error_msg)
+                
+            # Пробуем получить операцию агрегации
+            try:
+                operation = AggregationOperation(op_str.lower())
+            except ValueError:
+                available_ops = ', '.join(f"'{op.value}'" for op in AggregationOperation)
+                error_msg = (
+                    f'Неподдерживаемая операция агрегации: "{op_str}". '
+                    f'Используйте одну из: {available_ops}'
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
                 
             return cls(column=column, operation=operation)
             
         except ValueError as e:
-            error_msg = f'Неверный формат агрегации: {agg_str}. '
-            error_msg += 'Используйте "column=operation" (например, "price=avg")'
-            logger.error(error_msg)
+            # Если уже обработали ошибку, просто пробрасываем её
+            if str(e).startswith(('Неверный формат', 'Не указано', 'Неподдерживаемая операция')):
+                raise
+                
+            # Для остальных ошибок формируем общее сообщение
+            error_msg = (
+                f'Неверный формат строки агрегации: "{agg_str}". '
+                f'Используйте: column=operation, где operation одно из: '
+                f'{", ".join(op.value for op in AggregationOperation)}'
+            )
+            logger.error('%s: %s', error_msg, str(e))
             raise ValueError(error_msg) from e
 
 
@@ -173,6 +242,9 @@ class DataProcessor:
             
         Returns:
             Отфильтрованный список строк или копию всех данных, если условие пустое
+            
+        Raises:
+            ValueError: Если условие фильтрации содержит ошибки
         """
         if not condition or not condition.strip():
             return self._data.copy()
@@ -181,6 +253,18 @@ class DataProcessor:
             filter_cond = FilterCondition.from_string(condition)
             result = []
             
+            # Проверяем существование колонки в данных
+            if not self._data:
+                return []
+                
+            available_columns = set(self._data[0].keys())
+            if filter_cond.column not in available_columns:
+                raise ValueError(
+                    f'Колонка "{filter_cond.column}" не найдена. '
+                    f'Доступные колонки: {", ".join(sorted(available_columns))}'
+                )
+            
+            has_matches = False
             for row in self._data:
                 if filter_cond.column not in row:
                     continue
@@ -193,6 +277,7 @@ class DataProcessor:
                         filter_num = float(filter_cond.value)
                         if self._compare_numeric(num_value, filter_cond.operator, filter_num):
                             result.append(row.copy())
+                            has_matches = True
                         continue
                     except ValueError:
                         pass
@@ -200,12 +285,31 @@ class DataProcessor:
                 # Иначе сравниваем как строки
                 if self._compare_strings(cell_value, filter_cond.operator, filter_cond.value):
                     result.append(row.copy())
+                    has_matches = True
+            
+            # Для обратной совместимости с тестами возвращаем пустой список, а не вызываем исключение
+            # при несовпадении типов данных и оператора
+            if not has_matches and result:
+                first_value = next((row[filter_cond.column] for row in self._data if filter_cond.column in row), "")
+                if first_value and not first_value.strip().replace('.', '', 1).isdigit() and filter_cond.operator != FilterOperator.EQUAL:
+                    # Логируем предупреждение, но не прерываем выполнение
+                    logger.warning(
+                        'Оператор %s не может быть применен к строковому значению. '
+                        'Используйте "=" для сравнения строк.',
+                        filter_cond.operator.value
+                    )
+                    return []
                     
             return result
             
+        except ValueError as e:
+            # Перехватываем только ValueError, чтобы не перехватывать другие исключения
+            error_msg = str(e)
+            logger.error('Ошибка при фильтрации: %s', error_msg)
+            raise ValueError(error_msg) from None
         except Exception as e:
-            error_msg = f'Ошибка при фильтрации данных: {e}'
-            logger.error(error_msg)
+            error_msg = f'Непредвиденная ошибка при фильтрации: {str(e)}'
+            logger.error(error_msg, exc_info=True)
             raise ValueError(error_msg) from e
     
     def aggregate_data(self, data: List[DataRow], aggregation: str) -> Optional[dict]:
@@ -224,40 +328,83 @@ class DataProcessor:
                 'value': float,    # Результат агрегации
                 'count': int       # Количество обработанных значений
             }
+            
+        Raises:
+            ValueError: Если агрегация содержит ошибки
         """
+        if not data:
+            return None
+            
         try:
             agg = Aggregation.from_string(aggregation)
             values = []
             
+            # Проверяем существование колонки
+            available_columns = set(data[0].keys())
+            if agg.column not in available_columns:
+                raise ValueError(
+                    f'Колонка "{agg.column}" не найдена. '
+                    f'Доступные колонки: {", ".join(sorted(available_columns))}'
+                )
+            
+            # Собираем числовые значения
+            non_numeric_count = 0
             for row in data:
                 if agg.column not in row:
                     continue
+                    
                 try:
-                    values.append(float(row[agg.column]))
+                    value = row[agg.column]
+                    if value is not None and str(value).strip():
+                        values.append(float(value))
                 except (ValueError, TypeError):
-                    continue
+                    non_numeric_count += 1
             
+            # Проверяем, есть ли числовые значения
             if not values:
+                # Для обратной совместимости с тестами возвращаем None, а не вызываем исключение
+                logger.warning(
+                    'Не удалось выполнить агрегацию: колонка %s не содержит числовых значений',
+                    agg.column
+                )
                 return None
                 
+            # Если есть нечисловые значения, выводим предупреждение
+            if non_numeric_count > 0:
+                logger.warning(
+                    'Пропущено %d нечисловых значений в колонке %s',
+                    non_numeric_count, agg.column
+                )
+            
             result = {
                 'operation': agg.operation.value,
                 'column': agg.column,
                 'count': len(values)
             }
             
-            if agg.operation == AggregationOperation.AVG:
-                result['value'] = sum(values) / len(values)
-            elif agg.operation == AggregationOperation.MIN:
-                result['value'] = min(values)
-            elif agg.operation == AggregationOperation.MAX:
-                result['value'] = max(values)
+            # Вычисляем результат агрегации
+            try:
+                if agg.operation == AggregationOperation.AVG:
+                    result['value'] = sum(values) / len(values)
+                elif agg.operation == AggregationOperation.MIN:
+                    result['value'] = min(values)
+                elif agg.operation == AggregationOperation.MAX:
+                    result['value'] = max(values)
+                else:
+                    raise ValueError(f'Неподдерживаемая операция агрегации: {agg.operation}')
+            except Exception as e:
+                raise ValueError(f'Ошибка при вычислении агрегации: {str(e)}') from e
                 
             return result
                 
+        except ValueError as e:
+            # Перехватываем только ValueError, чтобы не перехватывать другие исключения
+            error_msg = str(e)
+            logger.error('Ошибка при агрегации: %s', error_msg)
+            raise ValueError(error_msg) from None
         except Exception as e:
-            error_msg = f'Ошибка при агрегации данных: {e}'
-            logger.error(error_msg)
+            error_msg = f'Непредвиденная ошибка при агрегации: {str(e)}'
+            logger.error(error_msg, exc_info=True)
             raise ValueError(error_msg) from e
     
     @staticmethod

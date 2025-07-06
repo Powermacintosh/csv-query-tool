@@ -73,9 +73,9 @@ class TestCSVFilter(CSVTestBase):
                           indirect=True)
     def test_filter_invalid_condition(self, processor: DataProcessor):
         """Тестирование фильтрации с невалидными условиями"""
-        result = processor.filter_data('nonexistent>10')
-        assert result == [], 'Ожидается пустой список при фильтрации по несуществующей колонке'
-        with pytest.raises(ValueError, match='Неподдерживаемый оператор условия'):
+        with pytest.raises(ValueError, match='Колонка .* не найдена'):
+            processor.filter_data('nonexistent>10')
+        with pytest.raises(ValueError, match='Неподдерживаемый оператор'):
             processor.filter_data('age<>25')
     
     @pytest.mark.parametrize('csv_file',
@@ -84,18 +84,21 @@ class TestCSVFilter(CSVTestBase):
                           indirect=True)
     def test_filter_missing_column(self, processor: DataProcessor):
         """Тестирование фильтрации по несуществующей колонке."""
-        result = processor.filter_data('nonexistent_column_123=test')
-        assert result == [], 'Ожидается пустой список при фильтрации по несуществующей колонке'
+        with pytest.raises(ValueError, match='Колонка .* не найдена'):
+            processor.filter_data('nonexistent_column_123=test')
     
-    @pytest.mark.parametrize('invalid_condition, error_msg', [
-        ('>100', 'Не указано имя колонки для фильтрации'),
-        ('=100', 'Не указано имя колонки для фильтрации'),
-        ('column~100', 'Не найден поддерживаемый оператор в условии: column~100'),
-        ('column=', 'Не указано значение для сравнения'),
+    @pytest.mark.parametrize('invalid_condition, expected_error', [
+        ('>100', r'Не указано имя колонки для фильтрации'),
+        ('=100', r'Не указано имя колонки для фильтрации'),
+        (
+            'column~100', 
+            r'Не найден поддерживаемый оператор в условии: [\"\']?column~100[\"\']?[^\n]*Используйте один из: =, >, <'
+        ),
+        ('column=', r'Не указано значение для сравнения'),
     ])
-    def test_filter_condition_validation(self, invalid_condition: str, error_msg: str):
+    def test_filter_condition_validation(self, invalid_condition: str, expected_error: str):
         """Тестирование валидации условий фильтрации."""
-        with pytest.raises(ValueError, match=error_msg):
+        with pytest.raises(ValueError, match=expected_error):
             FilterCondition.from_string(invalid_condition)
             
     @pytest.mark.parametrize('empty_condition', ['', '   '])

@@ -1,4 +1,4 @@
-import pytest
+import pytest, re
 from pathlib import Path
 from typing import List
 
@@ -62,29 +62,51 @@ class TestCSVAggregation(CSVTestBase):
             if values:
                 assert result['value'] == max(values)
     
-    @pytest.mark.parametrize('csv_file', 
+    @pytest.mark.parametrize('csv_file',
                           [pytest.param(f, id=f.name) 
                            for f in (Path(__file__).parent.parent / 'data').glob('*.csv')],
                           indirect=True)
     def test_aggregate_invalid_column(self, processor: DataProcessor):
         """Тестирование агрегации с несуществующей колонкой."""
-        result = processor.aggregate_data(processor._data, 'nonexistent_column=avg')
-        assert result is None
-        result = processor.aggregate_data(processor._data, 'invalid=avg')
-        assert result is None
+        with pytest.raises(ValueError, match='Колонка .* не найдена'):
+            processor.aggregate_data(processor._data, 'nonexistent_column=avg')
+        with pytest.raises(ValueError, match='Колонка .* не найдена'):
+            processor.aggregate_data(processor._data, 'invalid=avg')
     
-    @pytest.mark.parametrize('invalid_agg', [
-        'column',
-        'column=',
-        '=avg',
-        'column=invalid_op',
-        '',
-        '   ',
+    @pytest.mark.parametrize('invalid_agg, expected_pattern', [
+        (
+            'column', 
+            r'(?i)неверный формат строки агрегации:.*column.*используйте.*column=operation'
+        ),
+        (
+            'column=', 
+            r'(?i)неверный формат строки агрегации:.*column=.*используйте.*column=operation'
+        ),
+        (
+            '=avg', 
+            r'(?i)не указано имя колонки для агрегации'
+        ),
+        (
+            'column=invalid_op', 
+            r'(?i)неподдерживаемая операция агрегации:.*invalid_op.*используйте одну из:'
+        ),
+        (
+            '', 
+            r'(?i)пустая строка агрегации'
+        ),
+        (
+            '   ', 
+            r'(?i)пустая строка агрегации'
+        ),
     ])
-    def test_aggregation_validation(self, invalid_agg: str):
+    def test_aggregation_validation(self, invalid_agg: str, expected_pattern: str):
         """Тестирование валидации условий агрегации."""
-        with pytest.raises(ValueError, match='Неверный формат агрегации'):
+        with pytest.raises(ValueError) as exc_info:
             Aggregation.from_string(invalid_agg)
+        
+        error_message = str(exc_info.value).lower()
+        assert re.search(expected_pattern, error_message, re.DOTALL), \
+            f'Ожидаемый паттерн "{expected_pattern}" не найден в сообщении: "{error_message}"'
     
     @pytest.mark.parametrize('csv_file',
                           [pytest.param(f, id=f.name) 
@@ -97,7 +119,7 @@ class TestCSVAggregation(CSVTestBase):
         column = numeric_columns[0]
         empty_data = []
         result = processor.aggregate_data(empty_data, f'{column}=avg')
-        assert result is None or result['value'] is None
+        assert result is None
     
     @pytest.mark.parametrize('csv_file', 
                           [pytest.param(f, id=f.name) 
@@ -108,5 +130,10 @@ class TestCSVAggregation(CSVTestBase):
         """Тестирование агрегации с недопустимой операцией."""
         if not numeric_columns:
             pytest.skip('Нет числовых колонок для тестирования')
-        with pytest.raises(ValueError):
+            
+        with pytest.raises(ValueError) as exc_info:
             processor.aggregate_data(processor._data, f'{numeric_columns[0]}=invalid_operation')
+            
+        error_message = str(exc_info.value).lower()
+        assert 'неподдерживаемая операция агрегации' in error_message
+        assert 'invalid_operation' in error_message
