@@ -39,6 +39,15 @@ logger_config = {
             'backupCount': 4,
             'formatter': 'cli_format'
         },
+		'test_sorting': {
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'level': 'DEBUG',
+            'filename': 'logs/test_sorting.log',
+            'when': 'W0',
+            'interval': 1,
+            'backupCount': 4,
+            'formatter': 'cli_format'
+        },
 	},
 	'loggers': {
         'tool_logger': {
@@ -50,6 +59,11 @@ logger_config = {
 			'level': 'CRITICAL',
 			'handlers': ['test_loading_csv'],
 			'propagate': False
-		}
+		},
+        'test_sorting_logger': {
+			'level': 'DEBUG',
+			'handlers': ['test_sorting'],
+			'propagate': False
+		},
 	},
 }

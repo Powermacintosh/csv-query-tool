@@ -6,6 +6,7 @@
 
 - Чтение CSV-файлов с произвольными колонками
 - Фильтрация данных с операторами `>`, `<`, `=`
+- Сортировка данных по возрастанию (asc) или убыванию (desc)
 - Агрегация данных: среднее (avg), минимум (min), максимум (max)
 - Красивый вывод в виде таблицы
 
@@ -28,8 +29,15 @@ poetry install
 ### Базовый синтаксис
 
 ```bash
-python main.py --file <filename.csv> [--where 'column>value'] [--aggregate 'column=operation']
+python main.py --file <filename.csv> [--where 'column>value'] [--order-by 'column=order'] [--aggregate 'column=operation']
 ```
+
+Где:
+
+- `--file` - путь к CSV файлу (обязательный параметр)
+- `--where` - условие фильтрации (необязательно)
+- `--order-by` - сортировка (необязательно, формат: `колонка=порядок`, где порядок: `asc` или `desc`)
+- `--aggregate` - агрегация данных (необязательно)
 
 ### Примеры
 
@@ -121,17 +129,51 @@ python main.py --file ./data/products.csv --where 'brand=apple' --aggregate 'rat
 
 ![img/11.png](img/11.png)
 
+12. Сортировка товаров по цене по возрастанию:
+
+```bash
+python main.py --file ./data/products.csv --order-by 'price=asc'
+```
+
+![img/12.png](img/12.png)
+
+13. Сортировка товаров по названию в обратном алфавитном порядке:
+
+```bash
+python main.py --file ./data/products.csv --order-by 'name=desc'
+```
+
+![img/13.png](img/13.png)
+
+14. Фильтрация и сортировка: самые дешевые товары Apple:
+
+```bash
+python main.py --file ./data/products.csv --where 'brand=apple' --order-by 'price=asc'
+```
+
+![img/14.png](img/14.png)
+
+15. Средняя цена товаров с рейтингом выше 4.5, отсортированных по убыванию цены:
+
+```bash
+python main.py --file ./data/products.csv --where 'rating>4.5' --order-by 'price=desc' --aggregate 'price=avg'
+```
+
+![img/15.png](img/15.png)
+
 ## Форматы данных
 
 - Фильтрация: `--where 'column>value'` (поддерживаются >, <, =)
+- Сортировка: `--order-by 'column=order'` (order: asc для возрастания, desc для убывания)
 - Агрегация: `--aggregate 'column=operation'` (доступно: avg, min, max)
 
 ## Ограничения
 
 - Все данные считываются как строки, но для числовых колонок доступно числовое сравнение
 - Фильтрация работает с любыми типами данных (сравнение строк чувствительно к регистру)
+- Сортировка работает с любыми типами данных (числа сортируются численно, остальные - лексикографически)
 - Агрегация работает только с числовыми колонками
-- Поддерживается только один фильтр и одна агрегация за запуск
+- Поддерживается только один фильтр, одна сортировка и одна агрегация за запуск
 
 ## Запуск тестов
 

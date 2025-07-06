@@ -16,6 +16,12 @@ class FilterOperator(Enum):
     LESS = '<'
 
 
+class SortOrder(Enum):
+    """Направления сортировки."""
+    ASC = 'asc'
+    DESC = 'desc'
+
+
 class AggregationOperation(Enum):
     """Поддерживаемые операции агрегации."""
     AVG = 'avg'
@@ -312,6 +318,77 @@ class DataProcessor:
             logger.error(error_msg, exc_info=True)
             raise ValueError(error_msg) from e
     
+    def sort_data(self, data: List[DataRow], sort_by: str) -> List[DataRow]:
+        """
+        Сортирует данные по указанной колонке.
+        
+        Args:
+            data: Данные для сортировки
+            sort_by: Строка в формате "column=order" (например, "price=asc" или "name=desc")
+            
+        Returns:
+            Отсортированный список строк
+            
+        Raises:
+            ValueError: Если строка сортировки имеет неверный формат или колонка не найдена
+        """
+        if not sort_by or '=' not in sort_by:
+            raise ValueError(
+                'Неверный формат сортировки. ' 
+                'Используйте: column=order, где order одно из: asc, desc'
+            )
+            
+        try:
+            column, order_str = (part.strip() for part in sort_by.split('=', 1))
+            if not column:
+                raise ValueError('Не указано имя колонки для сортировки')
+                
+            try:
+                order = SortOrder(order_str.lower())
+            except ValueError:
+                raise ValueError(
+                    f'Неподдерживаемое направление сортировки: "{order_str}". '
+                    f'Используйте одно из: {[e.value for e in SortOrder]}'
+                )
+            
+            # Проверяем существование колонки
+            if not data:
+                return []
+                
+            available_columns = set(data[0].keys())
+            if column not in available_columns:
+                raise ValueError(
+                    f'Колонка "{column}" не найдена. '
+                    f'Доступные колонки: {", ".join(sorted(available_columns))}'
+                )
+            
+            # Создаем копию данных для сортировки
+            sorted_data = data.copy()
+            
+            # Функция для извлечения значения с учетом типа
+            def get_sort_key(row):
+                value = row.get(column, '')
+                # Обработка пустых значений
+                if value is None or not str(value).strip():
+                    return (0, 0.0, '')  # (тип, числовое_значение, строковое_значение)
+                
+                # Пытаемся преобразовать в число
+                try:
+                    num_val = float(value)
+                    return (0, num_val, '')  # Числа сортируются по числовому значению
+                except (ValueError, TypeError):
+                    # Для нечисловых значений используем строковое представление
+                    return (1, 0.0, str(value).lower() if value else '')
+            
+            # Сортируем данные
+            reverse_sort = (order == SortOrder.DESC)
+            sorted_data.sort(key=get_sort_key, reverse=reverse_sort)
+            
+            return sorted_data
+            
+        except ValueError as e:
+            raise ValueError(f'Ошибка при сортировке: {str(e)}') from e
+
     def aggregate_data(self, data: List[DataRow], aggregation: str) -> Optional[dict]:
         """
         Выполняет агрегацию данных.
